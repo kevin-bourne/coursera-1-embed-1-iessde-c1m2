@@ -52,16 +52,18 @@ ifeq ($(PLATFORM),MSP432)
   CPU = cortex-m4
   ARCH = thumb
   SPECS = nosys.specs
-  CFLAGS = -c -DMSP432 -mcpu=$(CPU) -m$(ARCH) --specs=$(SPECS) $(INCLUDES)
+  CFLAGS = -DMSP432 -mcpu=$(CPU) -m$(ARCH) --specs=$(SPECS) $(INCLUDES)
   SIZEPRG = arm-none-eabi-size
   LINKER_FILE_FLAG = -T ../msp432p401r.lds
   OBJDUMP = arm-none-eabi-objdump
+  SIZECMD = arm-none-eabi-size
 else
   CC = gcc
   CFLAGS = -DHOST $(INCLUDES)
   SIZEPRG = size
   LINKER_FILE_FLAG =
   OBJDUMP = objdump
+  SIZECMD = size
 endif
 
 #------------------------------------------------------------------------------
@@ -89,7 +91,8 @@ compile-all: $(OBJS)
 
 build: compile-all
 	$(CC) $(OBJS) $(CFLAGS) $(LDFLAGS) -o $(TARGET).out; \
-	$(OBJDUMP) $(OBJDUMP_FLAGS) $(TARGET).out > $(TARGET).asm
+	$(OBJDUMP) $(OBJDUMP_FLAGS) $(TARGET).out > $(TARGET).asm; \
+	$(SIZECMD)  $(TARGET).out
 
 clean:
 	rm -f *.o *.i *.s *.asm *.d $(TARGET).out $(TARGET).map
@@ -98,7 +101,7 @@ clean:
 # Generic targets
 
 %.o : %.c
-	@if echo ${SOURCES} | grep -q $<; then \
+	if echo ${SOURCES} | grep -q $<; then \
 		echo "building $@"; \
 		$(CC) -c $< $(CFLAGS) -o $@; \
 	else \
