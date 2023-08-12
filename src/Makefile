@@ -27,58 +27,79 @@
 #      PLATFORM - Target PLATFFORM (HOST, MSP432)
 #
 #------------------------------------------------------------------------------
-include sources.mk
 
-# Platform Overrides
-PLATFORM = HOST
+# Define default PLATFORM
+ifndef PLATFORM
+  PLATFORM = HOST
+endif
+
+# Check PLATFORM validity
+ifeq ($(filter HOST MSP432, $(PLATFORM)),)
+  ERROR_MSG=$(error '$(PLATFORM)' is not a valid PLATFORM => use HOST or MSP432)
+  echo $(ERROR_MSG)
+endif
+
+include sources.mk
 
 # Architectures Specific Flags
 LINKER_FILE = ../msp432p401r.lds
 
 # Compiler Flags and Defines
-ifeq ($(PLATFORM),HOST)
-	CC = gcc
-	CFLAGS = -DHOST
-else ifeq($(PLATFORM),MSP432)
-	CC = arm-none-eabi-gcc
-	CPU = cortex-m4
-	ARCH = thumb
-	SPECS = nosys.specs
-	CFLAGS = -DMSP432 -mcpu=$(CPU) -m$(ARCH) --specs=$(SPECS)
+ifeq ($(PLATFORM),MSP432)
+  CC = arm-none-eabi-gcc
+  CPU = cortex-m4
+  ARCH = thumb
+  SPECS = nosys.specs
+  CFLAGS = -DMSP432 -mcpu=$(CPU) -m$(ARCH) --specs=$(SPECS) $(INCLUDES)
+  SIZEPRG = arm-none-eabi-size
 else
-	echo "'$(PLATFORM) : Unsupported PLATFOM. Must be HOST or MSP432"
-	exit 1
+  CC = gcc
+  CFLAGS = -DHOST $(INCLUDES)
+  SIZEPRG = size
 endif
 
 LD =
 LDFLAGS = 
 CPPFLAGS = -E
-ASMFLAGS = -S
+ASMFLAGS = -S # to produce human readable assembly code
 OBJDUMP = objdump
 
 TARGET = c1m2
 
-OBJS = $(SRCS:.c=.o)
-PP_FILES = $(SRCS:.c=.oi)
-ASM_FILES = $(SRCS:.c=.asm) $(SRCS:.c=.s)
+OBJS = $(SOURCES:.c=.o)
+PP_FILES = $(SOURCES:.c=.i)
+ASM_FILES = $(SOURCES:.c=.asm) $(SOURCES:.c=.s)
 
 %.o : %.c
-	$(CC) -c $< $(CFLAGS) -o $@
+	@if echo ${SOURCES} | grep -q $<; then \
+		echo "building $@"; \
+		$(CC) -c $< $(CFLAGS) -o $@; \
+	else \
+		echo "$@ is not a valid target for this PLATRFORM : $(PLATFORM)"; \
+	fi
 
 %.i : %.c
-	$(CC) $(CPPLAGS) $< $(CFLAGS) -o $@
+	@if echo ${SOURCES} | grep -q $<; then \
+		echo "building $@"; \
+		$(CC) $(CPPFLAGS) $< $(CFLAGS) -o $@; \
+	else \
+		echo "$@ is not a valid target for this PLATRFORM : $(PLATFORM)"; \
+	fi
 
-%.asm : %.o
-	$(CC) -$(ASMLAGS) $< $(CFLAGS) -o $@
-	$(OBJS) $@
-
+%.asm : %.c
+	@if echo ${SOURCES} | grep -q $<; then \
+		echo "building $@"; \
+		$(CC) $(ASMFLAGS) $< $(CFLAGS) -o $@; \
+	else \
+		echo "$@ is not a valid target for this PLATRFORM : $(PLATFORM)"; \
+	fi
 
 .PHONY: compile-all build clean
 
-compile-all:
+compile-all: $(OBJS)
 
 build:  $(OBJS)
 	$(CC) $(OBJS) $(CFLAGS) $(LDFLAGS) -o $(TARGET).out
 
 clean:
-	rm -f $(OBJS) $(PP_FILES) $(ASM_FILES) $(TARGET).out $(TARGET).map
+	rm -f *.o *.i *.s *.asm $(TARGET).out $(TARGET).map
