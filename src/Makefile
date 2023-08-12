@@ -2,10 +2,10 @@
 # Copyright (C) 2017 by Alex Fosdick - University of Colorado
 #
 # Redistribution, modification or use of this software in source or binary
-# forms is permitted as long as the files maintain this copyright. Users are 
+# forms is permitted as long as the files maintain this copyright. Users are
 # permitted to modify this and use it to learn about the field of embedded
 # software. Alex Fosdick and the University of Colorado are not liable for any
-# misuse of this material. 
+# misuse of this material.
 #
 #*****************************************************************************
 
@@ -28,6 +28,9 @@
 #
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Checks
+
 # Define default PLATFORM
 ifndef PLATFORM
   PLATFORM = HOST
@@ -41,34 +44,58 @@ endif
 
 include sources.mk
 
+#------------------------------------------------------------------------------
 # Architectures Specific Flags
-LINKER_FILE = ../msp432p401r.lds
 
-# Compiler Flags and Defines
 ifeq ($(PLATFORM),MSP432)
   CC = arm-none-eabi-gcc
   CPU = cortex-m4
   ARCH = thumb
   SPECS = nosys.specs
-  CFLAGS = -DMSP432 -mcpu=$(CPU) -m$(ARCH) --specs=$(SPECS) $(INCLUDES)
+  CFLAGS = -c -DMSP432 -mcpu=$(CPU) -m$(ARCH) --specs=$(SPECS) $(INCLUDES)
   SIZEPRG = arm-none-eabi-size
+  LINKER_FILE_FLAG = -T ../msp432p401r.lds
+  OBJDUMP = arm-none-eabi-objdump
 else
   CC = gcc
   CFLAGS = -DHOST $(INCLUDES)
   SIZEPRG = size
+  LINKER_FILE_FLAG =
+  OBJDUMP = objdump
 endif
 
-LD =
-LDFLAGS = 
-CPPFLAGS = -E
-ASMFLAGS = -S # to produce human readable assembly code
-OBJDUMP = objdump
-
+#------------------------------------------------------------------------------
+# common FLAGS
 TARGET = c1m2
+LD =
+LDFLAGS = -Wl,-Map=$(TARGET).map $(LINKER_FILE_FLAG)
+CPPFLAGS = -E
+DEPENDLAGS = -MD
+ASMFLAGS = -S # to produce human readable assembly code
+OBJDUMP_FLAGS = --disassemble
 
 OBJS = $(SOURCES:.c=.o)
 PP_FILES = $(SOURCES:.c=.i)
 ASM_FILES = $(SOURCES:.c=.asm) $(SOURCES:.c=.s)
+
+#------------------------------------------------------------------------------
+# Named targets
+
+.PHONY: all compile-all build clean
+
+all: clean compile-all build
+
+compile-all: $(OBJS)
+
+build: compile-all
+	$(CC) $(OBJS) $(CFLAGS) $(LDFLAGS) -o $(TARGET).out; \
+	$(OBJDUMP) $(OBJDUMP_FLAGS) $(TARGET).out > $(TARGET).asm
+
+clean:
+	rm -f *.o *.i *.s *.asm *.d $(TARGET).out $(TARGET).map
+
+#------------------------------------------------------------------------------
+# Generic targets
 
 %.o : %.c
 	@if echo ${SOURCES} | grep -q $<; then \
@@ -94,12 +121,10 @@ ASM_FILES = $(SOURCES:.c=.asm) $(SOURCES:.c=.s)
 		echo "$@ is not a valid target for this PLATRFORM : $(PLATFORM)"; \
 	fi
 
-.PHONY: compile-all build clean
-
-compile-all: $(OBJS)
-
-build:  $(OBJS)
-	$(CC) $(OBJS) $(CFLAGS) $(LDFLAGS) -o $(TARGET).out
-
-clean:
-	rm -f *.o *.i *.s *.asm $(TARGET).out $(TARGET).map
+%.d : %.c
+	@if echo ${SOURCES} | grep -q $<; then \
+		echo "building $@"; \
+		$(CC) -c $(DEPENDLAGS) $< $(CFLAGS); \
+	else \
+		echo "$@ is not a valid target for this PLATRFORM : $(PLATFORM)"; \
+	fi
